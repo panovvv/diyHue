@@ -18,8 +18,7 @@ def entertainmentService(lights, addresses, groups, host_ip):
             if data[:9].decode('utf-8') == "HueStream":
                 syncing = True #Set sync flag when receiving valid data
                 if data[14] == 0: #rgb colorspace
-                    i = 16
-                    while i < len(data):
+                    for i in range(16, len(data), 9):
                         if data[i] == 0: #Type of device 0x00 = Light
                             lightId = data[i+1] * 256 + data[i+2]
                             if lightId != 0:
@@ -45,13 +44,12 @@ def entertainmentService(lights, addresses, groups, host_ip):
                                 else:
                                     if frameID == 24: # => every seconds, increase in case the destination device is overloaded
                                         gottaSend = False
-                                        yee = proto == "yeelight"
-                                        brABS = abs(int((r + b + g) / 3) - lightStatus[lightId]["bri"])
                                         if r == 0 and g == 0 and b == 0: #Turn off if color is black
                                             if lightStatus[lightId]["on"]:
                                                 sendLightRequest(str(lightId), {"on": False, "transitiontime": 3}, lights, addresses, None, host_ip)
                                                 lightStatus[lightId]["on"] = False
                                         else:
+                                            brABS = abs(int((r + b + g) / 3) - lightStatus[lightId]["bri"])
                                             if lightStatus[lightId]["on"] == False: #Turn on if color is not black
                                                 sendLightRequest(str(lightId), {"on": True, "transitiontime": 3}, lights, addresses, None, host_ip)
                                                 lightStatus[lightId]["on"] = True
@@ -60,15 +58,14 @@ def entertainmentService(lights, addresses, groups, host_ip):
                                                 lightStatus[lightId]["bri"] = int((r + b + g) / 3)
                                             else:
                                                 gottaSend = True
+                                            yee = proto == "yeelight"
                                             if gottaSend or yee:
                                                 sendLightRequest(str(lightId), {"xy": convert_rgb_xy(r, g, b), "transitiontime": 3}, lights, addresses, [r, g, b], host_ip)
                                 frameID += 1
                                 if frameID == 25:
                                     frameID = 0
-                        i = i + 9
                 elif data[14] == 1: #cie colorspace
-                    i = 16
-                    while i < len(data):
+                    for i in range(16, len(data), 9):
                         if data[i] == 0: #Type of device 0x00 = Light
                             lightId = data[i+1] * 256 + data[i+2]
                             if lightId != 0:
@@ -93,16 +90,15 @@ def entertainmentService(lights, addresses, groups, host_ip):
                                     if frameID == 24 : #24 = every seconds, increase in case the destination device is overloaded
                                         sendLightRequest(str(lightId), {"xy": [x,y]}, lights, addresses, None, host_ip)
                                         frameID = 0
-                        i = i + 9
             if len(nativeLights) is not 0:
-                for ip in nativeLights.keys():
+                for ip in nativeLights:
                     udpmsg = bytearray()
                     for light in nativeLights[ip].keys():
                         udpmsg += bytes([light]) + bytes([nativeLights[ip][light][0]]) + bytes([nativeLights[ip][light][1]]) + bytes([nativeLights[ip][light][2]])
                     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM) # UDP
                     sock.sendto(udpmsg, (ip.split(":")[0], 2100))
             if len(esphomeLights) is not 0:
-                for ip in esphomeLights.keys():
+                for ip in esphomeLights:
                     udpmsg = bytearray()
                     udpmsg += bytes([0]) + bytes([esphomeLights[ip]["color"][0]]) + bytes([esphomeLights[ip]["color"][1]]) + bytes([esphomeLights[ip]["color"][2]]) + bytes([esphomeLights[ip]["color"][3]])
                     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM) # UDP

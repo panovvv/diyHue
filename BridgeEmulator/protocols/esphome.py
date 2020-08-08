@@ -34,27 +34,27 @@ def getLightType(light, address, data):
     request_data = ""
     if address["esphome_model"] == "ESPHome-RGBW":
         if "xy" in data: #revised according to hue api docs
-            request_data = request_data + "/light/color_led"
+            request_data += "/light/color_led"
         elif "ct" in data:
-            request_data = request_data + "/light/white_led"
+            request_data += "/light/white_led"
         elif ("hue" in data) or ("sat" in data):
-            request_data = request_data + "/light/color_led"
+            request_data += "/light/color_led"
         else:
             if light["state"]["colormode"] == "xy":
-                request_data = request_data + "/light/color_led"
+                request_data += "/light/color_led"
             elif light["state"]["colormode"] == "ct":
-                request_data = request_data + "/light/white_led"
+                request_data += "/light/white_led"
             elif light["state"]["colormode"] == "hs":
-                request_data = request_data + "/light/color_led"
+                request_data += "/light/color_led"
     elif address["esphome_model"] == "ESPHome-CT":
-        request_data = request_data + "/light/white_led"
+        request_data += "/light/white_led"
     elif address["esphome_model"] == "ESPHome-RGB":
-        request_data = request_data + "/light/color_led"
+        request_data += "/light/color_led"
     elif address["esphome_model"] == "ESPHome-Dimmable":
-        request_data = request_data + "/light/dimmable_led"
+        request_data += "/light/dimmable_led"
     elif address["esphome_model"] == "ESPHome-Toggle":
-        request_data = request_data + "/light/toggle_led"
-    
+        request_data += "/light/toggle_led"
+
     return request_data
 
 def discover(bridge_config, new_lights):
@@ -67,11 +67,11 @@ def discover(bridge_config, new_lights):
             logging.debug ( "ESPHome: probing ip " + ip)
             response = requests.get ("http://" + ip + "/text_sensor/light_id", timeout=3)
             device = json.loads(response.text)['state'].split(';') #get device data
-            mac = device[1]
-            device_name = device[2]
-            ct_boost = device[3]
-            rgb_boost = device[4]
             if response.status_code == 200 and device[0] == "esphome_diyhue_light":
+                mac = device[1]
+                device_name = device[2]
+                ct_boost = device[3]
+                rgb_boost = device[4]
                 logging.debug("ESPHome: Found " + device_name + " at ip " + ip)
                 white_response = requests.get ("http://" + ip + "/light/white_led", timeout=3)
                 color_response = requests.get ("http://" + ip + "/light/color_led", timeout=3)

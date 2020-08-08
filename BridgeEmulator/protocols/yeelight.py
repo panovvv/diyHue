@@ -114,8 +114,7 @@ def set_light(address, light, data, rgb = None):
             payload[cmdPrefix + "set_bright"] = [int(value / 2.55) + 1, "smooth", transitiontime]
         elif key == "ct":
             #if ip[:-3] == "201" or ip[:-3] == "202":
-            if light["name"].find("desklamp") > 0:
-                if value > 369: value = 369
+            if light["name"].find("desklamp") > 0 and value > 369: value = 369
             payload[cmdPrefix + "set_ct_abx"] = [int((-4800/347) * value + 2989900/347), "smooth", transitiontime]
         elif key == "hue":
             payload[cmdPrefix + "set_hsv"] = [int(value / 182), int(light["state"]["sat"] / 2.54), "smooth", transitiontime]
@@ -123,10 +122,7 @@ def set_light(address, light, data, rgb = None):
             payload[cmdPrefix + "set_hsv"] = [int(light["state"]["hue"] / 182), int(value / 2.54), "smooth", transitiontime]
         elif key == "xy":
             bri = light["state"]["bri"]
-            if rgb:
-                color = rgbBrightness(rgb, bri)
-            else:
-                color = convert_xy(value[0], value[1], bri)
+            color = rgbBrightness(rgb, bri) if rgb else convert_xy(value[0], value[1], bri)
             payload[cmdPrefix + "set_rgb"] = [(color[0] * 65536) + (color[1] * 256) + color[2], "smooth", transitiontime] #according to docs, yeelight needs this to set rgb. its r * 65536 + g * 256 + b
         elif key == "alert" and value != "none":
             payload[cmdPrefix + "start_cf"] = [ 4, 0, "1000, 2, 5500, 100, 1000, 2, 5500, 1, 1000, 2, 5500, 100, 1000, 2, 5500, 1"]

@@ -5,8 +5,10 @@ def nextFreeId(bridge_config, element):
     return str(i)
 
 # Define light defininitions for discovery features and adding device data to config
-light_types = {}
-light_types["Tasmota"] = {"type": "Extended color light", "swversion": "1.46.13_r26312"}
+light_types = {
+    "Tasmota": {"type": "Extended color light", "swversion": "1.46.13_r26312"}
+}
+
 light_types["Tasmota"]["state"] = {"on": False, "bri": 200, "hue": 0, "sat": 0, "xy": [0.0, 0.0], "alert": "none", "effect": "none", "colormode": "xy", "reachable": True}
 
 light_types["Shelly"] = {"type": "shelly1", "swversion": "1.46.13_r26312"}

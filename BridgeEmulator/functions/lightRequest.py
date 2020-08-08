@@ -8,230 +8,232 @@ from time import sleep
 from functions.updateGroup import updateGroupStats
 
 def sendLightRequest(light, data, lights, addresses, rgb = None, entertainmentHostIP = None):
+    if light not in addresses:
+        return
+    protocol_name = addresses[light]["protocol"]
+    for protocol in protocols:
+        if "protocols." + protocol_name == protocol.__name__:
+            try:
+                if entertainmentHostIP and protocol_name == "yeelight":
+                    protocol.enableMusic(addresses[light]["ip"], entertainmentHostIP)
+                if protocol_name in ["yeelight", "mi_box", "esphome", "tasmota"]:
+                    protocol.set_light(addresses[light], lights[light], data, rgb)
+                else:
+                    protocol.set_light(addresses[light], lights[light], data)
+            except Exception as e:
+                lights[light]["state"]["reachable"] = False
+                logging.warning(lights[light]["name"] + " light not reachable: %s", e)
+            return
+
     payload = {}
-    if light in addresses:
-        protocol_name = addresses[light]["protocol"]
-        for protocol in protocols:
-            if "protocols." + protocol_name == protocol.__name__:
-                try:
-                    if entertainmentHostIP and protocol_name == "yeelight":
-                        protocol.enableMusic(addresses[light]["ip"], entertainmentHostIP)
-                    if protocol_name in ["yeelight", "mi_box", "esphome", "tasmota"]:
-                        protocol.set_light(addresses[light], lights[light], data, rgb)
-                    else:
-                        protocol.set_light(addresses[light], lights[light], data)
-                except Exception as e:
-                    lights[light]["state"]["reachable"] = False
-                    logging.warning(lights[light]["name"] + " light not reachable: %s", e)
-                return
-
-        if addresses[light]["protocol"] == "native": #ESP8266 light or strip
-            url = "http://" + addresses[light]["ip"] + "/set?light=" + str(addresses[light]["light_nr"])
-            method = 'GET'
-            for key, value in data.items():
-                if key == "xy":
-                    url += "&x=" + str(value[0]) + "&y=" + str(value[1])
-                else:
-                    url += "&" + key + "=" + str(value)
-        elif addresses[light]["protocol"] in ["hue","deconz"]: #Original Hue light or Deconz light
-            url = "http://" + addresses[light]["ip"] + "/api/" + addresses[light]["username"] + "/lights/" + addresses[light]["light_id"] + "/state"
-            method = 'PUT'
-            payload.update(data)
-
-        elif addresses[light]["protocol"] == "domoticz": #Domoticz protocol
-            url = "http://" + addresses[light]["ip"] + "/json.htm?type=command&idx=" + addresses[light]["light_id"]
-            method = 'GET'
-            if "on" in data and not "bri" in data and not "ct" in data and not "xy" in data:
-                for key, value in data.items():
-                    url += "&param=switchlight"
-                    if key == "on":
-                        if value:
-                            url += "&switchcmd=On"
-                        else:
-                            url += "&switchcmd=Off"
+    if addresses[light]["protocol"] == "native": #ESP8266 light or strip
+        url = "http://" + addresses[light]["ip"] + "/set?light=" + str(addresses[light]["light_nr"])
+        method = 'GET'
+        for key, value in data.items():
+            if key == "xy":
+                url += "&x=" + str(value[0]) + "&y=" + str(value[1])
             else:
-                if "bri" in data:
-                    bri = data["bri"]
-                bri = int(bri)
-                if lights[light]["hascolor"]:
-                    url += "&param=setcolbrightnessvalue"
-                    color_data = {}
+                url += "&" + key + "=" + str(value)
+    elif addresses[light]["protocol"] in ["hue","deconz"]: #Original Hue light or Deconz light
+        url = "http://" + addresses[light]["ip"] + "/api/" + addresses[light]["username"] + "/lights/" + addresses[light]["light_id"] + "/state"
+        method = 'PUT'
+        payload.update(data)
 
-                    old_light_state = lights[light]["state"]
-                    colormode = old_light_state["colormode"]
-                    bri = old_light_state["bri"]
-                    if colormode == "ct":
-                        ct = old_light_state["ct"]
-                    if colormode == "xy":
-                        xy = old_light_state["xy"]
-
-                    if "ct" in data:
-                        ct = data["ct"]
-                    if "xy" in data:
-                        xy = data["xy"]
-
-                    color_data["m"] = 1 #0: invalid, 1: white, 2: color temp, 3: rgb, 4: custom
-                    if colormode == "ct":
-                        color_data["m"] = 2
-                        ct01 = (ct - 153) / (500 - 153) #map color temperature from 153-500 to 0-1
-                        ct255 = ct01 * 255 #map color temperature from 0-1 to 0-255
-                        color_data["t"] = ct255
-                    elif colormode == "xy":
-                        color_data["m"] = 3
-                        if rgb:
-                            (color_data["r"], color_data["g"], color_data["b"]) = rgbBrightness(rgb, bri)
-                        else:
-                            (color_data["r"], color_data["g"], color_data["b"]) = convert_xy(xy[0], xy[1], bri)
-                    url += "&color="+json.dumps(color_data)
-                    url += "&brightness=" + str(round(float(bri)/255*100))
-                else:
-                    url += "&param=switchlight&switchcmd=Set%20Level&level=" + str(bri)
-
-            urlObj = {}
-            urlObj["url"] = url
-
-        elif addresses[light]["protocol"] == "jeedom": #Jeedom protocol
-            url = "http://" + addresses[light]["ip"] + "/core/api/jeeApi.php?apikey=" + addresses[light]["light_api"] + "&type=cmd&id="
-            method = 'GET'
+    elif addresses[light]["protocol"] == "domoticz": #Domoticz protocol
+        url = "http://" + addresses[light]["ip"] + "/json.htm?type=command&idx=" + addresses[light]["light_id"]
+        method = 'GET'
+        if "on" in data and not "bri" in data and not "ct" in data and not "xy" in data:
             for key, value in data.items():
+                url += "&param=switchlight"
                 if key == "on":
                     if value:
-                        url += addresses[light]["light_on"]
+                        url += "&switchcmd=On"
                     else:
-                        url += addresses[light]["light_off"]
-                elif key == "bri":
-                    url += addresses[light]["light_slider"] + "&slider=" + str(round(float(value)/255*100)) # jeedom range from 0 to 100 (for zwave devices) instead of 0-255 of bridge
+                        url += "&switchcmd=Off"
+        else:
+            if "bri" in data:
+                bri = data["bri"]
+            bri = int(bri)
+            if lights[light]["hascolor"]:
+                url += "&param=setcolbrightnessvalue"
+                color_data = {}
 
-        elif addresses[light]["protocol"] == "milight": #MiLight bulb
-            url = "http://" + addresses[light]["ip"] + "/gateways/" + addresses[light]["device_id"] + "/" + addresses[light]["mode"] + "/" + str(addresses[light]["group"])
-            method = 'PUT'
-            for key, value in data.items():
-                if key == "on":
-                    payload["status"] = value
-                elif key == "bri":
-                    payload["brightness"] = value
-                elif key == "ct":
-                    payload["color_temp"] = int(value / 1.6 + 153)
-                elif key == "hue":
-                    payload["hue"] = value / 180
-                elif key == "sat":
-                    payload["saturation"] = value * 100 / 255
-                elif key == "xy":
-                    payload["color"] = {}
+                old_light_state = lights[light]["state"]
+                colormode = old_light_state["colormode"]
+                bri = old_light_state["bri"]
+                if colormode == "ct":
+                    ct = old_light_state["ct"]
+                elif colormode == "xy":
+                    xy = old_light_state["xy"]
+
+                if "ct" in data:
+                    ct = data["ct"]
+                if "xy" in data:
+                    xy = data["xy"]
+
+                color_data["m"] = 1 #0: invalid, 1: white, 2: color temp, 3: rgb, 4: custom
+                if colormode == "ct":
+                    color_data["m"] = 2
+                    ct01 = (ct - 153) / (500 - 153) #map color temperature from 153-500 to 0-1
+                    ct255 = ct01 * 255 #map color temperature from 0-1 to 0-255
+                    color_data["t"] = ct255
+                elif colormode == "xy":
+                    color_data["m"] = 3
                     if rgb:
-                        payload["color"]["r"], payload["color"]["g"], payload["color"]["b"] = rgbBrightness(rgb, lights[light]["state"]["bri"])
+                        (color_data["r"], color_data["g"], color_data["b"]) = rgbBrightness(rgb, bri)
                     else:
-                        payload["color"]["r"], payload["color"]["g"], payload["color"]["b"] = convert_xy(value[0], value[1], lights[light]["state"]["bri"])
-            logging.info(json.dumps(payload))
+                        (color_data["r"], color_data["g"], color_data["b"]) = convert_xy(xy[0], xy[1], bri)
+                url += "&color="+json.dumps(color_data)
+                url += "&brightness=" + str(round(float(bri)/255*100))
+            else:
+                url += "&param=switchlight&switchcmd=Set%20Level&level=" + str(bri)
 
-        elif addresses[light]["protocol"] == "ikea_tradfri": #IKEA Tradfri bulb
-            url = "coaps://" + addresses[light]["ip"] + ":5684/15001/" + str(addresses[light]["device_id"])
-            for key, value in data.items():
-                if key == "on":
-                    payload["5850"] = int(value)
-                elif key == "transitiontime":
-                    payload["5712"] = value
-                elif key == "bri":
-                    if value > 254:
-                        value = 254
-                    payload["5851"] = value
-                elif key == "ct":
-                    if value < 270:
-                        payload["5706"] = "f5faf6"
-                    elif value < 385:
-                        payload["5706"] = "f1e0b5"
-                    else:
-                        payload["5706"] = "efd275"
-                elif key == "xy":
-                    payload["5709"] = int(value[0] * 65535)
-                    payload["5710"] = int(value[1] * 65535)
-            if "hue" in data or "sat" in data:
-                if("hue" in data):
-                    hue = data["hue"]
+        urlObj = {}
+        urlObj["url"] = url
+
+    elif addresses[light]["protocol"] == "jeedom": #Jeedom protocol
+        url = "http://" + addresses[light]["ip"] + "/core/api/jeeApi.php?apikey=" + addresses[light]["light_api"] + "&type=cmd&id="
+        method = 'GET'
+        for key, value in data.items():
+            if key == "bri":
+                url += addresses[light]["light_slider"] + "&slider=" + str(round(float(value)/255*100)) # jeedom range from 0 to 100 (for zwave devices) instead of 0-255 of bridge
+
+            elif key == "on":
+                if value:
+                    url += addresses[light]["light_on"]
                 else:
-                    hue = lights[light]["state"]["hue"]
-                if("sat" in data):
-                    sat = data["sat"]
+                    url += addresses[light]["light_off"]
+    elif addresses[light]["protocol"] == "milight": #MiLight bulb
+        url = "http://" + addresses[light]["ip"] + "/gateways/" + addresses[light]["device_id"] + "/" + addresses[light]["mode"] + "/" + str(addresses[light]["group"])
+        method = 'PUT'
+        for key, value in data.items():
+            if key == "on":
+                payload["status"] = value
+            elif key == "bri":
+                payload["brightness"] = value
+            elif key == "ct":
+                payload["color_temp"] = int(value / 1.6 + 153)
+            elif key == "hue":
+                payload["hue"] = value / 180
+            elif key == "sat":
+                payload["saturation"] = value * 100 / 255
+            elif key == "xy":
+                payload["color"] = {}
+                if rgb:
+                    payload["color"]["r"], payload["color"]["g"], payload["color"]["b"] = rgbBrightness(rgb, lights[light]["state"]["bri"])
                 else:
-                    sat = lights[light]["state"]["sat"]
-                if("bri" in data):
-                    bri = data["bri"]
+                    payload["color"]["r"], payload["color"]["g"], payload["color"]["b"] = convert_xy(value[0], value[1], lights[light]["state"]["bri"])
+        logging.info(json.dumps(payload))
+
+    elif addresses[light]["protocol"] == "ikea_tradfri": #IKEA Tradfri bulb
+        url = "coaps://" + addresses[light]["ip"] + ":5684/15001/" + str(addresses[light]["device_id"])
+        for key, value in data.items():
+            if key == "bri":
+                if value > 254:
+                    value = 254
+                payload["5851"] = value
+            elif key == "ct":
+                if value < 270:
+                    payload["5706"] = "f5faf6"
+                elif value < 385:
+                    payload["5706"] = "f1e0b5"
                 else:
-                    bri = lights[light]["state"]["bri"]
-                rgbValue = hsv_to_rgb(hue, sat, bri)
-                xyValue = convert_rgb_xy(rgbValue[0], rgbValue[1], rgbValue[2])
-                payload["5709"] = int(xyValue[0] * 65535)
-                payload["5710"] = int(xyValue[1] * 65535)
-            if "5850" in payload and payload["5850"] == 0:
+                    payload["5706"] = "efd275"
+            elif key == "on":
+                payload["5850"] = int(value)
+            elif key == "transitiontime":
+                payload["5712"] = value
+            elif key == "xy":
+                payload["5709"] = int(value[0] * 65535)
+                payload["5710"] = int(value[1] * 65535)
+        if "hue" in data or "sat" in data:
+            if("hue" in data):
+                hue = data["hue"]
+            else:
+                hue = lights[light]["state"]["hue"]
+            if("sat" in data):
+                sat = data["sat"]
+            else:
+                sat = lights[light]["state"]["sat"]
+            if("bri" in data):
+                bri = data["bri"]
+            else:
+                bri = lights[light]["state"]["bri"]
+            rgbValue = hsv_to_rgb(hue, sat, bri)
+            xyValue = convert_rgb_xy(rgbValue[0], rgbValue[1], rgbValue[2])
+            payload["5709"] = int(xyValue[0] * 65535)
+            payload["5710"] = int(xyValue[1] * 65535)
+        if "5850" in payload:
+            if payload["5850"] == 0:
                 payload.clear() #setting brightnes will turn on the ligh even if there was a request to power off
                 payload["5850"] = 0
-            elif "5850" in payload and "5851" in payload: #when setting brightness don't send also power on command
+            elif "5851" in payload: #when setting brightness don't send also power on command
                 del payload["5850"]
-        elif addresses[light]["protocol"] == "flex":
-            msg = bytearray()
-            if "on" in data:
-                if data["on"]:
-                    msg = bytearray([0x71, 0x23, 0x8a, 0x0f])
-                else:
-                    msg = bytearray([0x71, 0x24, 0x8a, 0x0f])
-                checksum = sum(msg) & 0xFF
-                msg.append(checksum)
-                sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM) # UDP
-                sock.sendto(msg, (addresses[light]["ip"], 48899))
-            if ("bri" in data and lights[light]["state"]["colormode"] == "xy") or "xy" in data:
-                logging.info(pretty_json(data))
-                bri = data["bri"] if "bri" in data else lights[light]["state"]["bri"]
-                xy = data["xy"] if "xy" in data else lights[light]["state"]["xy"]
-                if rgb:
-                    color = rgbBrightness(rgb, bri)
-                else:
-                    color = convert_xy(xy[0], xy[1], bri)
-                msg = bytearray([0x41, color[0], color[1], color[2], 0x00, 0xf0, 0x0f])
-                checksum = sum(msg) & 0xFF
-                msg.append(checksum)
-                sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM) # UDP
-                sock.sendto(msg, (addresses[light]["ip"], 48899))
-            elif ("bri" in data and lights[light]["state"]["colormode"] == "ct") or "ct" in data:
-                bri = data["bri"] if "bri" in data else lights[light]["state"]["bri"]
-                msg = bytearray([0x41, 0x00, 0x00, 0x00, bri, 0x0f, 0x0f])
-                checksum = sum(msg) & 0xFF
-                msg.append(checksum)
-                sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM) # UDP
-                sock.sendto(msg, (addresses[light]["ip"], 48899))
-
-        try:
-            if addresses[light]["protocol"] == "ikea_tradfri":
-                if "5712" not in payload:
-                    payload["5712"] = 4 #If no transition add one, might also add check to prevent large transitiontimes
-                check_output("./coap-client-linux -m put -u \"" + addresses[light]["identity"] + "\" -k \"" + addresses[light]["preshared_key"] + "\" -e '{ \"3311\": [" + json.dumps(payload) + "] }' \"" + url + "\"", shell=True)
-            elif addresses[light]["protocol"] in ["hue", "deconz"]:
-                color = {}
-                if "xy" in payload:
-                    color["xy"] = payload["xy"]
-                    del(payload["xy"])
-                elif "ct" in payload:
-                    color["ct"] = payload["ct"]
-                    del(payload["ct"])
-                elif "hue" in payload:
-                    color["hue"] = payload["hue"]
-                    del(payload["hue"])
-                elif "sat" in payload:
-                    color["sat"] = payload["sat"]
-                    del(payload["sat"])
-                if len(payload) != 0:
-                    sendRequest(url, method, json.dumps(payload))
-                    if addresses[light]["protocol"] == "deconz":
-                        sleep(0.7)
-                if len(color) != 0:
-                    sendRequest(url, method, json.dumps(color))
+    elif addresses[light]["protocol"] == "flex":
+        msg = bytearray()
+        if "on" in data:
+            if data["on"]:
+                msg = bytearray([0x71, 0x23, 0x8a, 0x0f])
             else:
+                msg = bytearray([0x71, 0x24, 0x8a, 0x0f])
+            checksum = sum(msg) & 0xFF
+            msg.append(checksum)
+            sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM) # UDP
+            sock.sendto(msg, (addresses[light]["ip"], 48899))
+        if ("bri" in data and lights[light]["state"]["colormode"] == "xy") or "xy" in data:
+            logging.info(pretty_json(data))
+            bri = data["bri"] if "bri" in data else lights[light]["state"]["bri"]
+            xy = data["xy"] if "xy" in data else lights[light]["state"]["xy"]
+            if rgb:
+                color = rgbBrightness(rgb, bri)
+            else:
+                color = convert_xy(xy[0], xy[1], bri)
+            msg = bytearray([0x41, color[0], color[1], color[2], 0x00, 0xf0, 0x0f])
+            checksum = sum(msg) & 0xFF
+            msg.append(checksum)
+            sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM) # UDP
+            sock.sendto(msg, (addresses[light]["ip"], 48899))
+        elif ("bri" in data and lights[light]["state"]["colormode"] == "ct") or "ct" in data:
+            bri = data["bri"] if "bri" in data else lights[light]["state"]["bri"]
+            msg = bytearray([0x41, 0x00, 0x00, 0x00, bri, 0x0f, 0x0f])
+            checksum = sum(msg) & 0xFF
+            msg.append(checksum)
+            sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM) # UDP
+            sock.sendto(msg, (addresses[light]["ip"], 48899))
+
+    try:
+        if addresses[light]["protocol"] == "ikea_tradfri":
+            if "5712" not in payload:
+                payload["5712"] = 4 #If no transition add one, might also add check to prevent large transitiontimes
+            check_output("./coap-client-linux -m put -u \"" + addresses[light]["identity"] + "\" -k \"" + addresses[light]["preshared_key"] + "\" -e '{ \"3311\": [" + json.dumps(payload) + "] }' \"" + url + "\"", shell=True)
+        elif addresses[light]["protocol"] in ["hue", "deconz"]:
+            color = {}
+            if "xy" in payload:
+                color["xy"] = payload["xy"]
+                del(payload["xy"])
+            elif "ct" in payload:
+                color["ct"] = payload["ct"]
+                del(payload["ct"])
+            elif "hue" in payload:
+                color["hue"] = payload["hue"]
+                del(payload["hue"])
+            elif "sat" in payload:
+                color["sat"] = payload["sat"]
+                del(payload["sat"])
+            if len(payload) != 0:
                 sendRequest(url, method, json.dumps(payload))
-        except:
-            lights[light]["state"]["reachable"] = False
-            logging.info("request error")
+                if addresses[light]["protocol"] == "deconz":
+                    sleep(0.7)
+            if len(color) != 0:
+                sendRequest(url, method, json.dumps(color))
         else:
-            lights[light]["state"]["reachable"] = True
-            logging.info("LightRequest: " + url)
+            sendRequest(url, method, json.dumps(payload))
+    except:
+        lights[light]["state"]["reachable"] = False
+        logging.info("request error")
+    else:
+        lights[light]["state"]["reachable"] = True
+        logging.info("LightRequest: " + url)
 
 
 def syncWithLights(lights, addresses, users, groups, off_if_unreachable): #update Hue Bridge lights states
