@@ -53,19 +53,19 @@ def set_light(address, light, data):
     state = {"transition": 0.3}
     colorFromHsv = False
     for key, value in data.items():
-        if key == "ct":
-            state['color_temp'] = value
-        if key == "on":
-            state['state'] = "ON" if value == True else "OFF"
         if key == "bri":
             state['brightness'] = value
-        if key == "xy":
+        elif key == "ct":
+            state['color_temp'] = value
+        elif key == "on":
+            state['state'] = "ON" if value == True else "OFF"
+        elif key == "xy":
             state['color'] = {'x': value[0], 'y': value[1]}
-        if key == "hue" or key == "sat":
+        if key in ["hue", "sat"]:
             colorFromHsv = True
         if key == "alert":
             state['alert'] = value
-        if key == "transitiontime":
+        elif key == "transitiontime":
             state['transition'] = value / 10
 
     if colorFromHsv:
@@ -79,20 +79,20 @@ def set_light(address, light, data):
 def get_light_state(address, light):
     if latestStates[address['state_topic']] is None:
         return { 'reachable': False }
-    
+
     state = { 'reachable': True }
     mqttState = latestStates[address['state_topic']]
     for key, value in mqttState.items():
-        if key == "state":
-            state['on'] = (value == 'ON')
         if key == "brightness":
             state['bri'] = value
-        if key == "color_temp":
-            state['ct'] = value
-        if key == "color":
+        elif key == "color":
             state["colormode"] = "xy"
             state['xy'] = [value['x'], value['y']]
 
+        elif key == "color_temp":
+            state['ct'] = value
+        elif key == "state":
+            state['on'] = (value == 'ON')
     return state
 
 def discover(bridge_config, new_lights):

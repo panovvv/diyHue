@@ -134,9 +134,7 @@ def sendCmd(address, cmd, tries=3):
 def getSessionId(address):
 	global sessionId1, sessionId2
 	sendMsg(address, b'\x20\x00\x00\x00\x16\x02\x62\x3A\xD5\xED\xA3\x01\xAE\x08\x2D\x46\x61\x41\xA7\xF6\xDC\xAF\xD3\xE6\x00\x00\x1E')
-	totalTries = 0
-	while totalTries < 3:
-		totalTries+=1
+	for _ in range(3):
 		logging.info("wait for receiving session id")
 		data, address = sock.recvfrom(1024)
 		if len(data) == 22:
@@ -174,12 +172,7 @@ def sendOffCmd(address):
 def sendBrightnessCmd(address, brightness):
 	light_type = address["light_type"]
 	cmd = b''
-	if light_type == "rgbww":
-		cmd += b'\x03'
-	elif light_type == "rgbw":
-		cmd += b'\x02'
-	else:
-		cmd += b'\x02'
+	cmd += b'\x03' if light_type == "rgbww" else b'\x02'
 	cmd += bytes([int(brightness)])
 	cmd += b'\x00\x00\x00'
 	sendCmd(address, cmd)

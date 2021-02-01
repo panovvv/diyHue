@@ -64,8 +64,7 @@ class S(BaseHTTPRequestHandler):
             if apiKey not in bridges:
                 bridges[apiKey] = {}
                 print("register bridge: " + apiKey[-6:])
-            counter = 0
-            while counter < 150:
+            for _ in range(150):
                 bridges[apiKey]["lastseen"] = datetime.now()
                 if "action" in bridges[apiKey]:
                     self._set_end_headers(bytes(json.dumps(bridges[apiKey]["action"],separators=(',', ':'),ensure_ascii=False), "utf8"))
@@ -73,7 +72,6 @@ class S(BaseHTTPRequestHandler):
                     clients.remove(apiKey[-6:])
                     return
                 sleep(0.2)
-                counter += 1
             self._set_end_headers(bytes("{renew}", "utf8"))
             clients.remove(apiKey[-6:])
         elif url_pices[1].startswith("bridge"):
@@ -98,11 +96,11 @@ class S(BaseHTTPRequestHandler):
             ip = (base64.urlsafe_b64decode(get_parameters["data"][0])).decode('utf-8')
             output = []
             if ip in discovery:
-                for bridge in range(len(discovery[ip])):
-                    output.append({"id": discovery[ip][bridge]["id"],"internalipaddress": discovery[ip][bridge]["ip"]})
+                for item in discovery[ip]:
+                    output.append({"id": item["id"], "internalipaddress": item["ip"]})
             self._set_end_headers(bytes(json.dumps(output,ensure_ascii=False), "utf8"))
-            
-            
+
+
         else:
             self.send_error(404, 'not found')
     def do_POST(self):
@@ -140,12 +138,12 @@ class S(BaseHTTPRequestHandler):
             if ip not in discovery:
                 discovery[ip] = []
             bridgeExist = False
-            for bridge in range(len(discovery[ip])):
-                if post_dictionary["id"].lower() == discovery[ip][bridge]["id"]:
-                    bridgeExist = True 
-                    discovery[ip][bridge]["lastseen"] = datetime.now()
-                    discovery[ip][bridge]["internalipaddress"] = post_dictionary["internalipaddress"]
-            if bridgeExist == False:
+            for item in discovery[ip]:
+                if post_dictionary["id"].lower() == item["id"]:
+                    bridgeExist = True
+                    item["lastseen"] = datetime.now()
+                    item["internalipaddress"] = post_dictionary["internalipaddress"]
+            if not bridgeExist:
                 discovery[ip].append({"id": post_dictionary["id"].lower(), "ip": post_dictionary["internalipaddress"], "mac":  post_dictionary["macaddress"], "name": post_dictionary["name"], "lastseen": datetime.now()})
 
         else:
