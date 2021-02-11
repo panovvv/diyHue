@@ -64,7 +64,7 @@ if args.debug or (os.getenv('DEBUG') and (os.getenv('DEBUG') == "true" or os.get
     formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
     ch.setFormatter(formatter)
     root.addHandler(ch)
-    
+
 if args.bind_ip:
     BIND_IP = args.bind_ip
 elif os.getenv('BIND_IP'):
@@ -107,7 +107,7 @@ logging.info(mac)
 if args.docker or (os.getenv('DOCKER') and os.getenv('DOCKER') == "true"):
     print("Docker Setup Initiated")
     docker = True
-    dockerSetup(dockerMAC)
+    dockerSetup(mac)
     print("Docker Setup Complete")
 elif os.getenv('MAC'):
     dockerMAC = os.getenv('MAC')
@@ -511,6 +511,8 @@ def schedulerProcessor():
                             sendRequest(bridge_config["schedules"][schedule]["command"]["address"], bridge_config["schedules"][schedule]["command"]["method"], json.dumps(bridge_config["schedules"][schedule]["command"]["body"]), 1, delay)
                             if bridge_config["schedules"][schedule]["autodelete"]:
                                 del bridge_config["schedules"][schedule]
+                            else:
+                                bridge_config["schedules"][schedule]["status"] = "disabled"
             except Exception as e:
                 logging.info("Exception while processing the schedule " + schedule + " | " + str(e))
 
@@ -881,7 +883,7 @@ def websocketClient():
             del bridge_config["deconz"]["websocketport"]
 
         def received_message(self, m):
-            logging.info(m)
+            logging.debug(m)
             message = json.loads(str(m))
             try:
                 if message["r"] == "sensors":
